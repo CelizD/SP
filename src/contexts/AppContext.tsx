@@ -59,6 +59,9 @@ interface AppContextType {
   setCameras: React.Dispatch<React.SetStateAction<Camera[]>>;
   selectedCamera: Camera | null;
   setSelectedCamera: (camera: Camera | null) => void;
+  // Estado para edición de cámara (alias a selectedCamera)
+  editingCamera: Camera | null;
+  setEditingCamera: (camera: Camera | null) => void;
   
   // Estados para el modal de cámara
   isCameraModalOpen: boolean;
@@ -174,6 +177,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCameras,
     selectedCamera,
     setSelectedCamera,
+    // Alias para compatibilidad con componentes que usan `editingCamera`
+    editingCamera: selectedCamera,
+    setEditingCamera: setSelectedCamera,
     isCameraModalOpen,
     setIsCameraModalOpen,
     
