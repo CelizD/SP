@@ -1,14 +1,18 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
-// Tipos de vistas
+// ==========================================
+// 1. Definición de Tipos
+// ==========================================
+
 export type ViewType = 'dashboard' | 'cameras' | 'computer-vision' | 'users' | 'settings';
 
-// Tipos para la aplicación
 export interface User {
   id: string;
   username: string;
   email: string;
   role: 'admin' | 'teacher' | 'student';
+  status?: 'active' | 'inactive'; // Necesario para UsersView
+  lastLogin?: string;
 }
 
 export interface Camera {
@@ -32,133 +36,151 @@ export interface RoomMetric {
   humidity: number;
 }
 
-// Tipo del contexto
+// Interfaz para las notificaciones (Toasts)
+export interface ToastMessage {
+  id: string;
+  title: string;
+  message?: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+}
+
+// ==========================================
+// 2. Interfaz del Contexto
+// ==========================================
+
 interface AppContextType {
-  // Estados de UI
+  // UI & Tema
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   
-  // Estados de autenticación
+  // Autenticación
   userRole: 'admin' | 'teacher' | 'student' | null;
   username: string | null;
   authView: 'login' | 'recovery';
   setAuthView: (view: 'login' | 'recovery') => void;
-  
-  // Funciones de autenticación
   handleLogin: (role: 'admin' | 'teacher' | 'student', name: string) => void;
   handleLogout: () => void;
   
-  // Estados para modales
-  editingRoom: RoomMetric | null;
-  setEditingRoom: (room: RoomMetric | null) => void;
+  // Gestión de Usuarios
+  users: User[];
+  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   editingUser: User | null;
   setEditingUser: (user: User | null) => void;
   
-  // Estados de cámaras
+  // Gestión de Cámaras
   cameras: Camera[];
   setCameras: React.Dispatch<React.SetStateAction<Camera[]>>;
-  selectedCamera: Camera | null;
+  selectedCamera: Camera | null; // Para Computer Vision
   setSelectedCamera: (camera: Camera | null) => void;
-  // Estado para edición de cámara (alias a selectedCamera)
-  editingCamera: Camera | null;
+  editingCamera: Camera | null; // Para el Modal de Edición
   setEditingCamera: (camera: Camera | null) => void;
-  
-  // Estados para el modal de cámara
   isCameraModalOpen: boolean;
   setIsCameraModalOpen: (isOpen: boolean) => void;
   
-  // Estados del tour
+  // Métricas y Dashboard
+  metrics: RoomMetric[];
+  setMetrics: React.Dispatch<React.SetStateAction<RoomMetric[]>>;
+  liveMetrics: RoomMetric[]; // Compatibilidad
+  setLiveMetrics: React.Dispatch<React.SetStateAction<RoomMetric[]>>; // Compatibilidad
+  
+  // Tour (Compatibilidad)
   tourStep: number;
   setTourStep: (step: number) => void;
   handleTourFinish: () => void;
-  
-  // Estados de métricas
-  metrics: RoomMetric[];
-  setMetrics: React.Dispatch<React.SetStateAction<RoomMetric[]>>;
-  liveMetrics: RoomMetric[];
-  setLiveMetrics: React.Dispatch<React.SetStateAction<RoomMetric[]>>;
-  
-  // Estados de usuarios
-  users: User[];
-  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-  
-  // Estado de aula seleccionada
+
+  // Estado de aula seleccionada (Compatibilidad)
   selectedRoom: string | null;
   setSelectedRoom: (room: string | null) => void;
+  
+  // Modales adicionales (Compatibilidad)
+  editingRoom: RoomMetric | null;
+  setEditingRoom: (room: RoomMetric | null) => void;
+
+  // Sistema de Notificaciones (Toasts)
+  toasts: ToastMessage[];
+  addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  removeToast: (id: string) => void;
 }
 
 // Crear el contexto
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Proveedor del contexto
+// ==========================================
+// 3. Proveedor (Provider)
+// ==========================================
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Estados de UI
+  // --- Estados Generales ---
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  
+  // --- Autenticación ---
   const [userRole, setUserRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [authView, setAuthView] = useState<'login' | 'recovery'>('login');
   
-  // Estados para modales
-  const [editingRoom, setEditingRoom] = useState<RoomMetric | null>(null);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  
-  // Estados de cámaras
-  const [cameras, setCameras] = useState<Camera[]>([]);
-  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
-  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
-  
-  // Estados del tour
-  const [tourStep, setTourStep] = useState<number>(0);
-  
-  // Estados de métricas
-  const [metrics, setMetrics] = useState<RoomMetric[]>([]);
-  const [liveMetrics, setLiveMetrics] = useState<RoomMetric[]>([]);
-  
-  // Estados de usuarios
+  // --- Datos ---
   const [users, setUsers] = useState<User[]>([]);
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [metrics, setMetrics] = useState<RoomMetric[]>([]);
+  const [liveMetrics, setLiveMetrics] = useState<RoomMetric[]>([]); // Compatibilidad
   
-  // Estado de aula seleccionada
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+  // --- Estados de Selección y Modales ---
+  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
+  const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingRoom, setEditingRoom] = useState<RoomMetric | null>(null); // Compatibilidad
+  const [selectedRoom, setSelectedRoom] = useState<string | null>(null); // Compatibilidad
 
-  // Función para cambiar tema
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
+  // --- Tour (Compatibilidad) ---
+  const [tourStep, setTourStep] = useState<number>(0);
 
-  // Función de login
+  // --- Sistema de Notificaciones ---
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Funciones Auxiliares
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
   const handleLogin = (role: 'admin' | 'teacher' | 'student', name: string) => {
     setUserRole(role);
     setUsername(name);
-    setAuthView('login');
-    
-    // Guardar en localStorage
     localStorage.setItem('userRole', role);
     localStorage.setItem('username', name);
   };
 
-  // Función de logout
   const handleLogout = () => {
     setUserRole(null);
     setUsername(null);
-    
-    // Limpiar localStorage
     localStorage.removeItem('userRole');
     localStorage.removeItem('username');
   };
 
-  // Función para terminar el tour
   const handleTourFinish = () => {
     setTourStep(0);
     localStorage.setItem('tourCompleted', 'true');
   };
 
+  // Función para agregar notificaciones
+  const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
+    const id = Date.now().toString();
+    const newToast = { ...toast, id };
+    setToasts((prev) => [...prev, newToast]);
+
+    // Auto eliminar después de 3 segundos
+    setTimeout(() => {
+      removeToast(id);
+    }, 5000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   // Valor del contexto
   const contextValue: AppContextType = {
-    // UI
     theme,
     toggleTheme,
     
-    // Autenticación
     userRole,
     username,
     authView,
@@ -166,41 +188,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     handleLogin,
     handleLogout,
     
-    // Modales
-    editingRoom,
-    setEditingRoom,
+    users,
+    setUsers,
     editingUser,
     setEditingUser,
     
-    // Cámaras
     cameras,
     setCameras,
     selectedCamera,
     setSelectedCamera,
-    // Alias para compatibilidad con componentes que usan `editingCamera`
-    editingCamera: selectedCamera,
-    setEditingCamera: setSelectedCamera,
+    editingCamera,
+    setEditingCamera,
     isCameraModalOpen,
     setIsCameraModalOpen,
     
-    // Tour
-    tourStep,
-    setTourStep,
-    handleTourFinish,
-    
-    // Métricas
     metrics,
     setMetrics,
     liveMetrics,
     setLiveMetrics,
     
-    // Usuarios
-    users,
-    setUsers,
-    
-    // Aula seleccionada
+    tourStep,
+    setTourStep,
+    handleTourFinish,
+
     selectedRoom,
-    setSelectedRoom
+    setSelectedRoom,
+    editingRoom,
+    setEditingRoom,
+    
+    toasts,
+    addToast,
+    removeToast
   };
 
   return (
@@ -210,7 +228,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 };
 
-// Hook personalizado para usar el contexto
+// ==========================================
+// 4. Hook Personalizado
+// ==========================================
+
 export const useAppContext = () => {
   const context = useContext(AppContext);
   if (!context) {

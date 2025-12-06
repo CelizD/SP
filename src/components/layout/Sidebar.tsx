@@ -1,78 +1,61 @@
-import React from 'react';
-import { useAppContext, ViewType } from '../../contexts/AppContext';
+import { NavLink } from 'react-router-dom';
+import { LayoutDashboard, Video, Eye, Settings, LogOut, Users, MonitorPlay } from 'lucide-react';
+import clsx from 'clsx';
 
 interface SidebarProps {
   onLogout: () => void;
-  currentView: ViewType;
-  setCurrentView: (view: ViewType) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onLogout, currentView, setCurrentView }) => {
-  const { theme, userRole, username } = useAppContext();
-
-  // Definir las vistas disponibles por rol
-  const getMenuItems = () => {
-    const items = [
-      { id: 'dashboard' as ViewType, label: 'Dashboard', icon: '📊', roles: ['admin', 'teacher', 'student'] },
-      { id: 'cameras' as ViewType, label: 'Cámaras', icon: '📹', roles: ['admin', 'teacher'] },
-      { id: 'computer-vision' as ViewType, label: 'Computer Vision', icon: '👁️', roles: ['admin', 'teacher'] },
-      { id: 'settings' as ViewType, label: 'Configuración', icon: '⚙️', roles: ['admin', 'teacher', 'student'] },
-    ];
-    
-    // Solo admin ve usuarios
-    if (userRole === 'admin') {
-      items.splice(3, 0, { id: 'users' as ViewType, label: 'Usuarios', icon: '👥', roles: ['admin'] });
-    }
-    
-    return items.filter(item => item.roles.includes(userRole || ''));
-  };
-
-  const menuItems = getMenuItems();
+export default function Sidebar({ onLogout }: SidebarProps) {
+  const menuItems = [
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+    { icon: Video, label: 'Cámaras', path: '/cameras' },
+    { icon: Eye, label: 'Visión Artificial', path: '/computer-vision' },
+    { icon: Users, label: 'Usuarios', path: '/users' },
+    { icon: Settings, label: 'Configuración', path: '/settings' },
+  ];
 
   return (
-    <aside className={`sidebar ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <div className="sidebar-header">
-        <div className="logo">
-          <span className="logo-icon">👁️</span>
-          <h2>Vision Pro</h2>
-        </div>
-        <p className="tagline">Sistema de monitoreo</p>
-      </div>
-
-      <div className="user-info">
-        <div className="avatar">
-          {userRole === 'admin' ? '👨‍💼' : userRole === 'teacher' ? '👩‍🏫' : '👨‍🎓'}
-        </div>
-        <div>
-          <p className="username">{username}</p>
-          <p className="role">{userRole}</p>
+    <aside className="fixed left-0 top-0 z-50 h-screen w-64 bg-white border-r border-slate-200 flex flex-col">
+      {/* Logo */}
+      <div className="h-16 flex items-center px-6 border-b border-slate-200">
+        <div className="flex items-center gap-2 text-blue-600">
+          <MonitorPlay className="h-6 w-6" />
+          <span className="text-lg font-bold text-slate-900">Vision Pro</span>
         </div>
       </div>
 
-      <nav className="sidebar-nav">
-        <ul>
-          {menuItems.map(item => (
-            <li key={item.id}>
-              <button
-                className={`nav-item ${currentView === item.id ? 'active' : ''}`}
-                onClick={() => setCurrentView(item.id)}
-              >
-                <span className="icon">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+      {/* Menú */}
+      <nav className="flex-1 px-3 py-6 space-y-1">
+        {menuItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              clsx(
+                'flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-md transition-colors',
+                isActive
+                  ? 'bg-blue-50 text-blue-700' // Activo: Azul claro
+                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900' // Inactivo: Gris oscuro -> Negro
+              )
+            }
+          >
+            <item.icon className={clsx("h-5 w-5", ({ isActive }: any) => isActive ? "text-blue-600" : "text-slate-400")} />
+            {item.label}
+          </NavLink>
+        ))}
       </nav>
 
-      <div className="sidebar-footer">
-        <button onClick={onLogout} className="logout-btn">
-          <span>🚪</span>
+      {/* Botón Salir */}
+      <div className="p-4 border-t border-slate-200">
+        <button
+          onClick={onLogout}
+          className="flex w-full items-center gap-3 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"
+        >
+          <LogOut className="h-5 w-5" />
           <span>Cerrar Sesión</span>
         </button>
       </div>
     </aside>
   );
-};
-
-export default Sidebar;
+}

@@ -1,39 +1,19 @@
-/* Reset y estilos globales */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
+  @apply bg-background text-text;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #0f172a; /* Forzar color negro suave */
+  background-color: #f8fafc;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
-
-#root {
-  min-height: 100vh;
-}
-
-/* Utilidades de Tailwind básicas (si no estás usando Tailwind) */
-.flex {
-  display: flex;
-}
-
-.hidden {
-  display: none;
-}
-
-@media (min-width: 768px) {
-  .md\:flex {
-    display: flex;
-  }
+/* Tarjetas blancas limpias */
+.card {
+  @apply bg-white border border-border rounded-lg shadow-sm;
 }
