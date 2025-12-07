@@ -1,21 +1,17 @@
-// src/config/backend.ts
-
 const config = {
   api: {
-    // Asegúrate de que esto apunte a tu servidor Django
+    // Apuntamos directo al backend
     baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-    timeout: 10000, // Damos más tiempo por si hay redirecciones
+    timeout: 10000,
     endpoints: {
       auth: {
-        // Esta es la ruta que vi en tu urls.py que lleva a views.login_submit
+        // CAMBIO IMPORTANTE: Esta es la ruta real que tiene tu urls.py
         login: '/web/login/submit/', 
-        // Usaremos esta vista para cerrar sesión (views.logout_view)
         logout: '/web/logout/',
-        // Usaremos esto para verificar si el login funcionó (views.all_cameras_view)
+        // Usaremos esto para verificar si la sesión está activa
         checkAuth: '/api/cameras/all/',
       },
       cameras: '/api/cameras/',
-      // Ajusta estas si tienes endpoints específicos para grabaciones
       recordings: '/api/recordings/',
       events: '/api/events/',
     }
