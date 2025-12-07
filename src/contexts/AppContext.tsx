@@ -1,18 +1,13 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import { cameraService } from '../services/api'; // Importamos el servicio
 
-// ==========================================
-// 1. Definición de Tipos
-// ==========================================
-
-export type ViewType = 'dashboard' | 'cameras' | 'computer-vision' | 'users' | 'settings';
-
+// --- Tipos ---
 export interface User {
   id: string;
   username: string;
   email: string;
   role: 'admin' | 'teacher' | 'student';
-  status?: 'active' | 'inactive'; // Necesario para UsersView
-  lastLogin?: string;
+  status?: 'active' | 'inactive';
 }
 
 export interface Camera {
@@ -25,18 +20,9 @@ export interface Camera {
   rtsp_url: string;
   status: 'online' | 'offline';
   createdAt: string;
+  camera_id?: string; // Para compatibilidad con el backend
 }
 
-export interface RoomMetric {
-  id: string;
-  name: string;
-  capacity: number;
-  currentOccupancy: number;
-  temperature: number;
-  humidity: number;
-}
-
-// Interfaz para las notificaciones (Toasts)
 export interface ToastMessage {
   id: string;
   title: string;
@@ -44,104 +30,63 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'warning' | 'info';
 }
 
-// ==========================================
-// 2. Interfaz del Contexto
-// ==========================================
-
+// --- Interfaz del Contexto ---
 interface AppContextType {
-  // UI & Tema
   theme: 'light' | 'dark';
   toggleTheme: () => void;
-  
-  // Autenticación
-  userRole: 'admin' | 'teacher' | 'student' | null;
+  userRole: string | null;
   username: string | null;
-  authView: 'login' | 'recovery';
-  setAuthView: (view: 'login' | 'recovery') => void;
-  handleLogin: (role: 'admin' | 'teacher' | 'student', name: string) => void;
+  handleLogin: (role: string, name: string) => void;
   handleLogout: () => void;
-  
-  // Gestión de Usuarios
   users: User[];
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-  editingUser: User | null;
-  setEditingUser: (user: User | null) => void;
-  
-  // Gestión de Cámaras
   cameras: Camera[];
   setCameras: React.Dispatch<React.SetStateAction<Camera[]>>;
-  selectedCamera: Camera | null; // Para Computer Vision
+  selectedCamera: Camera | null;
   setSelectedCamera: (camera: Camera | null) => void;
-  editingCamera: Camera | null; // Para el Modal de Edición
+  editingCamera: Camera | null;
   setEditingCamera: (camera: Camera | null) => void;
+  editingUser: User | null; 
+  setEditingUser: (user: User | null) => void; 
   isCameraModalOpen: boolean;
   setIsCameraModalOpen: (isOpen: boolean) => void;
-  
-  // Métricas y Dashboard
-  metrics: RoomMetric[];
-  setMetrics: React.Dispatch<React.SetStateAction<RoomMetric[]>>;
-  liveMetrics: RoomMetric[]; // Compatibilidad
-  setLiveMetrics: React.Dispatch<React.SetStateAction<RoomMetric[]>>; // Compatibilidad
-  
-  // Tour (Compatibilidad)
-  tourStep: number;
-  setTourStep: (step: number) => void;
-  handleTourFinish: () => void;
-
-  // Estado de aula seleccionada (Compatibilidad)
-  selectedRoom: string | null;
-  setSelectedRoom: (room: string | null) => void;
-  
-  // Modales adicionales (Compatibilidad)
-  editingRoom: RoomMetric | null;
-  setEditingRoom: (room: RoomMetric | null) => void;
-
-  // Sistema de Notificaciones (Toasts)
+  deleteCamera: (id: string) => Promise<void>; // <--- NUEVA FUNCIÓN
   toasts: ToastMessage[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
 }
 
-// Crear el contexto
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// ==========================================
-// 3. Proveedor (Provider)
-// ==========================================
-
+// --- Provider ---
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // --- Estados Generales ---
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  // Inicializar tema desde localStorage
+  const [theme, setTheme] = useState<'light' | 'dark'>(
+    () => (localStorage.getItem('theme') as 'light' | 'dark') || 'light'
+  );
   
-  // --- Autenticación ---
-  const [userRole, setUserRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
-  const [authView, setAuthView] = useState<'login' | 'recovery'>('login');
-  
-  // --- Datos ---
+  const [userRole, setUserRole] = useState<string | null>(localStorage.getItem('userRole'));
+  const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
   const [users, setUsers] = useState<User[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
-  const [metrics, setMetrics] = useState<RoomMetric[]>([]);
-  const [liveMetrics, setLiveMetrics] = useState<RoomMetric[]>([]); // Compatibilidad
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   
-  // --- Estados de Selección y Modales ---
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editingRoom, setEditingRoom] = useState<RoomMetric | null>(null); // Compatibilidad
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(null); // Compatibilidad
 
-  // --- Tour (Compatibilidad) ---
-  const [tourStep, setTourStep] = useState<number>(0);
+  // 1. Efecto para aplicar el Tema Oscuro/Claro al HTML
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
-  // --- Sistema de Notificaciones ---
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  // Funciones Auxiliares
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-  const handleLogin = (role: 'admin' | 'teacher' | 'student', name: string) => {
+  const handleLogin = (role: string, name: string) => {
     setUserRole(role);
     setUsername(name);
     localStorage.setItem('userRole', role);
@@ -150,92 +95,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleLogout = () => {
     setUserRole(null);
-    setUsername(null);
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('username');
+    localStorage.clear();
+    window.location.href = '/login';
   };
 
-  const handleTourFinish = () => {
-    setTourStep(0);
-    localStorage.setItem('tourCompleted', 'true');
+  // 2. Función para Eliminar Cámara
+  const deleteCamera = async (id: string) => {
+    if (!window.confirm("¿Estás seguro de eliminar esta cámara?")) return;
+
+    try {
+        await cameraService.delete(id);
+        // Filtrar usando ambos posibles IDs
+        setCameras(prev => prev.filter(c => (c.id !== id && c.camera_id !== id)));
+        addToast({ title: "Eliminada", message: "Cámara eliminada correctamente", type: "success" });
+    } catch (error) {
+        console.error(error);
+        addToast({ title: "Error", message: "No se pudo eliminar la cámara", type: "error" });
+    }
   };
 
-  // Función para agregar notificaciones
   const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
     const id = Date.now().toString();
-    const newToast = { ...toast, id };
-    setToasts((prev) => [...prev, newToast]);
-
-    // Auto eliminar después de 3 segundos
-    setTimeout(() => {
-      removeToast(id);
-    }, 5000);
+    setToasts(prev => [...prev, { ...toast, id }]);
+    setTimeout(() => removeToast(id), 5000);
   }, []);
 
   const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // Valor del contexto
-  const contextValue: AppContextType = {
-    theme,
-    toggleTheme,
-    
-    userRole,
-    username,
-    authView,
-    setAuthView,
-    handleLogin,
-    handleLogout,
-    
-    users,
-    setUsers,
-    editingUser,
-    setEditingUser,
-    
-    cameras,
-    setCameras,
-    selectedCamera,
-    setSelectedCamera,
-    editingCamera,
-    setEditingCamera,
-    isCameraModalOpen,
-    setIsCameraModalOpen,
-    
-    metrics,
-    setMetrics,
-    liveMetrics,
-    setLiveMetrics,
-    
-    tourStep,
-    setTourStep,
-    handleTourFinish,
-
-    selectedRoom,
-    setSelectedRoom,
-    editingRoom,
-    setEditingRoom,
-    
-    toasts,
-    addToast,
-    removeToast
-  };
-
   return (
-    <AppContext.Provider value={contextValue}>
+    <AppContext.Provider value={{
+      theme, toggleTheme,
+      userRole, username, handleLogin, handleLogout,
+      users, setUsers, editingUser, setEditingUser,
+      cameras, setCameras, selectedCamera, setSelectedCamera, editingCamera, setEditingCamera,
+      isCameraModalOpen, setIsCameraModalOpen,
+      deleteCamera, // Exportamos la función
+      toasts, addToast, removeToast
+    }}>
       {children}
     </AppContext.Provider>
   );
 };
 
-// ==========================================
-// 4. Hook Personalizado
-// ==========================================
-
 export const useAppContext = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useAppContext debe ser usado dentro de AppProvider');
-  }
+  if (!context) throw new Error('useAppContext debe usarse dentro de AppProvider');
   return context;
 };

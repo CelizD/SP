@@ -4,17 +4,21 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // CORRECCIÓN: 'darkMode' va aquí, en la raíz, NO dentro de theme/colors
+  darkMode: 'class', 
   theme: {
     extend: {
       colors: {
-        // Forzamos colores claros
-        background: '#f8fafc', // Gris muy suave (Slate 50)
-        surface: '#ffffff',    // Blanco puro
-        primary: '#2563eb',    // Azul estándar
-        text: '#0f172a',       // Negro suave (Slate 900) para lectura
-        textLight: '#64748b',  // Gris para textos secundarios
-        border: '#e2e8f0',     // Gris borde
-      }
+        background: '#f8fafc', 
+        surface: '#ffffff',    
+        primary: '#2563eb',    
+        text: '#0f172a',      
+        textLight: '#64748b',  
+        border: '#e2e8f0',     
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
     },
   },
   plugins: [],

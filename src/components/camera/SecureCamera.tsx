@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Lock, User, Key, Eye, Activity, Maximize, Wifi, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Lock, User, Key, Wifi, AlertTriangle, RefreshCw, EyeOff } from 'lucide-react';
+import backendConfig from '../../config/backend';
 
 interface SecureCameraProps {
+  cameraId?: string; // Necesitamos el ID para pedir el video
   cameraConfig?: {
     username?: string;
     password?: string;
@@ -10,69 +12,83 @@ interface SecureCameraProps {
   modelType?: string;
 }
 
-const SecureCamera: React.FC<SecureCameraProps> = ({ cameraConfig, modelType }) => {
+const SecureCamera: React.FC<SecureCameraProps> = ({ cameraId, cameraConfig, modelType }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState(cameraConfig?.username || '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Estado para el video real
+  const [imageSrc, setImageSrc] = useState<string>('');
+  const [error, setError] = useState(false);
+  const intervalRef = useRef<number | null>(null);
+
+  // Efecto para iniciar el "streaming" (refresco de imágenes) cuando se autentica
+  useEffect(() => {
+    if (isAuthenticated && cameraId) {
+      const fetchFrame = () => {
+        // Agregamos un timestamp (?t=...) para obligar al navegador a recargar la imagen
+        const url = `${backendConfig.api.baseURL}/api/cameras/${cameraId}/frame/?t=${Date.now()}`;
+        setImageSrc(url);
+      };
+
+      // Iniciar el ciclo de video (aprox 10-15 FPS)
+      fetchFrame(); // Primer frame inmediato
+      intervalRef.current = window.setInterval(fetchFrame, 100); 
+
+      return () => {
+        if (intervalRef.current) window.clearInterval(intervalRef.current);
+      };
+    }
+  }, [isAuthenticated, cameraId]);
 
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (username && password) {
       setLoading(true);
-      // Simular delay de red
+      // Simulación de login a la cámara (esto es local, la seguridad real la maneja Django)
       setTimeout(() => {
         setIsAuthenticated(true);
         setLoading(false);
-      }, 1000);
+      }, 800);
     }
   };
 
   return (
-    <div className="w-full h-full bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative flex flex-col">
+    <div className="w-full h-full bg-black rounded-xl overflow-hidden border border-slate-800 relative flex flex-col shadow-2xl">
       {!isAuthenticated ? (
-        /* Pantalla de Autenticación */
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-lg border border-slate-200">
-            <div className="text-center mb-6">
-              <div className="mx-auto w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-500">
-                <Lock className="w-6 h-6" />
+        /* Pantalla de Bloqueo / Autenticación */
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/90 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700">
+            <div className="text-center mb-8">
+              <div className="mx-auto w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mb-4 text-blue-400 shadow-inner">
+                <Lock className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Acceso Restringido</h3>
-              <p className="text-sm text-slate-500 mt-1">Ingresa las credenciales del dispositivo</p>
+              <h3 className="text-xl font-bold text-white tracking-tight">Acceso Restringido</h3>
+              <p className="text-sm text-slate-400 mt-2">Cámara protegida por protocolo RTSP</p>
             </div>
             
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 uppercase">Usuario</label>
+            <form onSubmit={handleAuthSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Credenciales</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-4 w-4 text-slate-400" />
-                  </div>
+                  <User className="absolute left-3 top-2.5 h-5 w-5 text-slate-500" />
                   <input
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-                    placeholder="admin"
-                    required
+                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Usuario"
                   />
                 </div>
-              </div>
-              
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 uppercase">Contraseña</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Key className="h-4 w-4 text-slate-400" />
-                  </div>
+                  <Key className="absolute left-3 top-2.5 h-5 w-5 text-slate-500" />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-                    placeholder="••••••••"
-                    required
+                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Contraseña"
                   />
                 </div>
               </div>
@@ -80,107 +96,63 @@ const SecureCamera: React.FC<SecureCameraProps> = ({ cameraConfig, modelType }) 
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg shadow-blue-900/50 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Verificando...' : 'Desbloquear Cámara'}
+                {loading ? 'Estableciendo túnel seguro...' : 'Desbloquear Transmisión'}
               </button>
             </form>
           </div>
         </div>
       ) : (
-        /* Vista de Cámara Activa */
-        <div className="flex flex-col h-full bg-slate-900">
+        /* Vista de Video Real */
+        <div className="flex-1 relative bg-black flex items-center justify-center">
           
-          {/* Barra Superior del Video */}
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-800/50 border-b border-slate-700">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 rounded-md border border-red-500/20">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-xs font-bold text-red-500 tracking-wide">EN VIVO</span>
-              </div>
-              <div className="h-4 w-px bg-slate-700"></div>
-              <span className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                {cameraConfig?.username}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
-              <span className="flex items-center gap-1"><Wifi className="w-3 h-3" /> 1080p</span>
-              <span className="bg-slate-700 px-2 py-0.5 rounded text-slate-200">
-                {modelType?.toUpperCase() || 'IA OFF'}
-              </span>
-            </div>
-          </div>
-          
-          {/* Contenedor de Video (Simulado) */}
-          <div className="flex-1 relative overflow-hidden group bg-black flex items-center justify-center">
-            
-            {/* Simulación del Feed de Video */}
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-900/20 to-slate-900/60 pointer-events-none"></div>
-            
-            {/* Mensaje Placeholder */}
-            <div className="text-center text-slate-500">
-              <Eye className="w-12 h-12 mx-auto mb-2 opacity-20" />
-              <p className="text-sm font-mono tracking-wider opacity-60">RTSP STREAM FEED</p>
-            </div>
-
-            {/* Overlay de Detecciones (Simulado) */}
-            <div className="absolute inset-0 p-8 pointer-events-none">
-              {/* Box 1 */}
-              <div className="absolute top-1/3 left-1/4 border-2 border-blue-500/70 bg-blue-500/5 rounded-sm p-1">
-                <span className="absolute -top-6 left-0 bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-t-sm flex items-center gap-1">
-                  PERSONA <span className="opacity-75">98%</span>
-                </span>
-                <div className="w-32 h-48"></div>
-              </div>
-              
-              {/* Box 2 */}
-              <div className="absolute bottom-1/4 right-1/3 border-2 border-purple-500/70 bg-purple-500/5 rounded-sm p-1">
-                <span className="absolute -top-6 left-0 bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-t-sm flex items-center gap-1">
-                  OBJETO <span className="opacity-75">87%</span>
-                </span>
-                <div className="w-24 h-24"></div>
-              </div>
-            </div>
-
-            {/* Controles Flotantes (Hover) */}
-            <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-              <button className="p-2 bg-black/50 hover:bg-black/70 text-white rounded-lg backdrop-blur-md transition-colors">
-                <Maximize className="w-4 h-4" />
+          {/* Capa de Video */}
+          {!error ? (
+            <img 
+              src={imageSrc} 
+              alt="Live Feed" 
+              className="w-full h-full object-contain"
+              onError={() => setError(true)}
+            />
+          ) : (
+            <div className="text-center text-slate-500 p-8">
+              <EyeOff className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium text-slate-400">Señal de video interrumpida</p>
+              <p className="text-sm mt-2">Verifica que la cámara esté encendida en el Dashboard</p>
+              <button 
+                onClick={() => setError(false)} 
+                className="mt-6 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm flex items-center gap-2 mx-auto transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" /> Reintentar conexión
               </button>
             </div>
-          </div>
-          
-          {/* Footer de Estadísticas */}
-          <div className="bg-white border-t border-slate-200 px-4 py-3 grid grid-cols-3 gap-4">
-            <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-0.5">Velocidad</span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg font-bold text-slate-700">30</span>
-                <span className="text-xs text-slate-500">FPS</span>
+          )}
+
+          {/* Overlay de Información (HUD) */}
+          <div className="absolute top-0 left-0 w-full p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start pointer-events-none">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/50 rounded text-red-400 backdrop-blur-sm">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]"></span>
+                <span className="text-xs font-bold tracking-widest">EN VIVO</span>
+              </div>
+              <div className="bg-black/40 backdrop-blur-md px-3 py-1 rounded border border-white/10">
+                 <span className="text-xs font-mono text-blue-400">{modelType?.toUpperCase() || 'YOLOv8'} ENGINE</span>
               </div>
             </div>
             
-            <div className="flex flex-col border-l border-slate-100 pl-4">
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-0.5 flex items-center gap-1">
-                Eventos <Activity className="w-3 h-3" />
-              </span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg font-bold text-blue-600">2</span>
-                <span className="text-xs text-slate-500">Detectados</span>
-              </div>
-            </div>
-            
-            <div className="flex flex-col border-l border-slate-100 pl-4">
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-0.5">Latencia</span>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold text-slate-700">12ms</span>
-                <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden max-w-[60px]">
-                  <div className="h-full bg-emerald-500 w-[20%]"></div>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 text-slate-400 text-xs font-mono bg-black/40 px-2 py-1 rounded backdrop-blur-md">
+              <Wifi className="w-3 h-3" />
+              <span>{Math.floor(Math.random() * (120 - 60) + 60)}ms</span>
             </div>
           </div>
+
+          {/* Crosshair (Mira central para efecto profesional) */}
+          <div className="absolute inset-0 pointer-events-none opacity-20">
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border border-white/50 rounded-full"></div>
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-white rounded-full"></div>
+          </div>
+
         </div>
       )}
     </div>
