@@ -16,31 +16,36 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowRecovery }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    try {
-      // 1. Llamada REAL al Backend
-      const response = await authService.login({ username, password });
-      
-      // 2. Si hay éxito, el backend nos devuelve datos (ajusta según tu respuesta Django)
-      // Por defecto asumimos que si no lanza error, entró bien.
-      
-      // Obtenemos el rol del usuario (o 'admin' por defecto si el backend no lo manda)
-      const role = response.data.role || 'admin'; 
-      
-      // 3. Guardamos sesión en el Contexto
-      handleLogin(role, username);
-      
-      addToast({
-        title: '¡Bienvenido!',
-        message: 'Sesión iniciada correctamente',
-        type: 'success'
-      });
+  try {
+    // 1. Llamada REAL al Backend
+    const response = await authService.login({ username, password });
+    
+    // 2. Si hay éxito, el backend nos devuelve datos (ajusta según tu respuesta Django)
+    // Por defecto asumimos que si no lanza error, entró bien.
+    
+    // 3. Validar y convertir el rol
+    const isValidRole = (role: any): role is 'admin' | 'teacher' | 'student' => {
+      return ['admin', 'teacher', 'student'].includes(role);
+    };
+    
+    const role = isValidRole(response.data.role) ? response.data.role : 'admin';
+    
+    // 4. Guardamos sesión en el Contexto
+    handleLogin(role, username);
+    
+    addToast({
+      title: '¡Bienvenido!',
+      message: 'Sesión iniciada correctamente',
+      type: 'success'
+    });
 
-    } catch (err: any) {
+
+} catch (err: any) {
       console.error(err);
       setError('Credenciales inválidas o error de conexión');
       addToast({
