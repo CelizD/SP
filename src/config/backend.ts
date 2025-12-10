@@ -1,14 +1,13 @@
 const config = {
   api: {
-    // Apuntamos directo al backend
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+    // IMPORTANTE: Dejar vacío ('') para usar el Proxy del paso anterior.
+    // Esto hace que el navegador guarde la sesión automáticamente.
+    baseURL: '', 
     timeout: 10000,
     endpoints: {
       auth: {
-        // CAMBIO IMPORTANTE: Esta es la ruta real que tiene tu urls.py
-        login: '/web/login/submit/', 
+        login: '/web/login/submit/',
         logout: '/web/logout/',
-        // Usaremos esto para verificar si la sesión está activa
         checkAuth: '/api/cameras/all/',
       },
       cameras: '/api/cameras/',
@@ -17,7 +16,7 @@ const config = {
     }
   },
   websocket: {
-    url: import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws',
+    url: import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000/ws',
   }
 };
 
