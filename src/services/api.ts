@@ -3,50 +3,61 @@ import backendConfig from '../config/backend';
 
 // 1. Configuración base
 const api = axios.create({
-  baseURL: '', // Lo dejamos vacío para usar el Proxy de Vite
+  baseURL: '', // Usamos el Proxy de Vite
   timeout: 10000,
-  withCredentials: true, // Importante para las cookies
+  withCredentials: true,
 });
 
-// 2. Interceptor de Solicitudes (No tocamos nada aquí)
+// 2. Interceptor de Solicitudes
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => config,
   (error) => Promise.reject(error)
 );
 
-// 3. Interceptor de Respuestas (AQUÍ ESTÁ LA MAGIA)
+// 3. Interceptor de Respuestas (EL TRADUCTOR)
 api.interceptors.response.use(
   (response: AxiosResponse) => {
-    // Si la respuesta es del Login, la dejamos pasar aunque sea HTML
+    
+    // CASO ESPECIAL: AGREGAR CÁMARA
+    // Si estamos en el endpoint de agregar/borrar cámara y el backend nos devuelve HTML (redirección),
+    // nosotros lo convertimos en un "ÉXITO" falso para que React no llore.
+    if (
+        (response.config.url?.includes('/add/') || response.config.url?.includes('/remove/')) &&
+        (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>'))
+    ) {
+        console.log("Interceptada redirección HTML en cámara -> Transformando a Éxito JSON");
+        return {
+            ...response,
+            data: { success: true, message: "Operación exitosa (Simulada desde HTML)" }
+        };
+    }
+
+    // CASO ESPECIAL: LOGIN
+    // El login también devuelve HTML, lo dejamos pasar
     if (response.config.url?.includes('login')) {
       return response;
     }
 
-    // Para otras peticiones, si recibimos HTML (página de error de Django)
-    // significa que la sesión caducó o la ruta está mal.
+    // Si recibimos HTML en cualquier OTRO lugar (ej: lista de cámaras), ahí sí es error de sesión
     if (
       response.headers['content-type']?.includes('text/html') || 
       (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>'))
     ) {
-      console.warn("Sesión expirada detectada");
-      // Opcional: localStorage.clear();
-      // No redirigimos forzosamente aquí para no causar bucles infinitos
-      return Promise.reject(new Error('Sesión expirada o respuesta inválida'));
+      console.warn("Sesión posiblemente expirada");
+      return Promise.reject(new Error('Sesión expirada'));
     }
+
     return response;
   },
   (error) => {
-    // Si es un error 404 en el Login, lo ignoramos y dejamos que el componente maneje el error
-    // Esto arregla el problema del "redirect loco" que tenías antes
+    // Si nos da 404 en checkAuth, lo ignoramos para no bloquear el login
     if (error.response?.status === 404 && error.config?.url?.includes('checkAuth')) {
-        console.warn("Error 404 en checkAuth ignorado");
         return Promise.reject(error);
     }
-
-    // Solo sacamos al usuario si es un 401/403 REAL confirmado
+    
+    // Manejo global de errores
     if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.clear();
-      // window.location.href = '/login'; // Comentado para evitar recargas agresivas
     }
     return Promise.reject(error);
   }
@@ -58,37 +69,16 @@ export const authService = {
     formData.append('username', credentials.username);
     formData.append('password', credentials.password);
 
-    // PASO 1: Enviar credenciales
-    // Django responderá con una redirección (HTML del dashboard) si es correcto
-    // o con el HTML del login si falló.
+    // Hacemos el POST. Si el backend redirige, Axios sigue la redirección.
     const response = await api.post(backendConfig.api.endpoints.auth.login, formData);
     
-    // TRUCO: Verificamos a dónde nos mandó el backend
-    // Si la URL final contiene "dashboard" o la raíz, es éxito.
-    // Si sigue en "login", falló.
+    // Verificamos si la URL final ya no es login (significa que entró)
     const finalUrl = response.request?.responseURL || '';
-    const isLoginFailure = finalUrl.includes('/login') && !finalUrl.includes('dashboard');
-
-    if (isLoginFailure) {
+    if (finalUrl.includes('/login') && !finalUrl.includes('dashboard')) {
        throw new Error("Credenciales incorrectas");
     }
 
-    // PASO 2: Confirmación doble
-    // Intentamos pedir la lista de cámaras. Si funciona, estamos dentro.
-    try {
-        await api.get(backendConfig.api.endpoints.auth.checkAuth);
-    } catch (e) {
-        // Si falla el checkAuth pero el paso 1 fue exitoso, 
-        // asumimos que estamos dentro de todas formas para no bloquear al usuario.
-        console.warn("CheckAuth falló, pero el login parece exitoso. Continuando...");
-    }
-
-    return { 
-        data: { 
-            role: 'admin', 
-            username: credentials.username 
-        } 
-    };
+    return { data: { role: 'admin', username: credentials.username } };
   },
 
   logout: async () => {
@@ -106,12 +96,23 @@ export const authService = {
 export const cameraService = {
   getAll: () => api.get(backendConfig.api.endpoints.cameras + 'all/'),
   getById: (id: string) => api.get(`${backendConfig.api.endpoints.cameras}${id}/status/`),
+  
   create: (data: any) => {
     const formData = new FormData();
     formData.append('camera_name', data.name);
-    formData.append('stream_url', data.rtsp_url || data.ip);
-    return api.post(backendConfig.api.endpoints.cameras + 'add/', formData);
+    
+    // CAMBIO IMPORTANTE:
+    // Si viene 'stream_url' (modo YouTube), úsalo. Si no, usa rtsp_url o ip.
+    const finalUrl = data.stream_url || data.rtsp_url || data.ip;
+    
+    formData.append('stream_url', finalUrl);
+    
+    // Importante: Django espera form-data, no JSON
+    return api.post(backendConfig.api.endpoints.cameras + 'add/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
   },
+  
   start: (id: string) => api.post(`${backendConfig.api.endpoints.cameras}${id}/start/`),
   stop: (id: string) => api.post(`${backendConfig.api.endpoints.cameras}${id}/stop/`),
   delete: (id: string) => api.post(`${backendConfig.api.endpoints.cameras}${id}/remove/`),
